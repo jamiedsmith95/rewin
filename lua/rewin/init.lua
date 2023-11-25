@@ -40,12 +40,14 @@ M.closeWin = function()
   local win = vim.api.nvim_get_var('refWin')
   vim.api.nvim_win_close(win, true)
   vim.api.nvim_set_var('refWin', nil)
+  vim.api.nvim_set_var('haveWin', false)
 end
 
 M.TeleMark = function(opts)
   local telePicks = require "telescope.pickers"
   local teleThemes = require "telescope.themes"
   local teleFinders = require "telescope.finders"
+
   local conf = require("telescope.config").values
   local marks = vim.api.nvim_exec2('marks', { output = true })
   print(marks.output)
@@ -76,35 +78,46 @@ M.TeleMark = function(opts)
   end
   print(vim.inspect(results))
 
+
   telePicks.new(opts, {
     prompt_title = "Mark Selector",
     finder = teleFinders.new_table {
       results = results,
+      require"telescope.previewers".new_buffer_previewer(options={define_preview = function()})
+      
     }
 
   }):find()
 end
+vim.api.nvim_set_var('haveWin', false)
 
 M.MakeWin = function(opts)
   getBuf()
-  opts = opts or {}
-  local defaults = {
-    relative = 'cursor',
-    row = -2,
-    col = 20,
-    title = 'Reference',
-    width = 80,
-    height = 15,
-    focusable = false,
-    anchor =
-    'SW',
-    border = 'none'
-  }
-  opts = vim.tbl_deep_extend(force, defaults, opts)
-  local buffer = vim.api.nvim_get_var('refBuf')
-  local win = vim.api.nvim_open_win(buffer, false,
-    opts)
-  vim.api.nvim_set_var('refWin', win)
+
+  if vim.api.nvim_get_var('haveWin') then
+    print('window already exists')
+  else
+    opts = opts or {}
+    local defaults = {
+      relative = 'cursor',
+      row = -2,
+      col = 30,
+      title = 'Reference',
+      width = 80,
+      height = 15,
+      focusable = false,
+      anchor =
+      'SW',
+      border = 'none'
+    }
+    -- opts = vim.tbl_deep_extend(force, defaults, opts)
+    local buffer = vim.api.nvim_get_var('refBuf')
+    local win = vim.api.nvim_open_win(buffer, false,
+      defaults)
+    vim.api.nvim_set_var('haveWin', true)
+    vim.api.nvim_set_var('refWin', win)
+  end
+
 end
 vim.keymap.set('n', '<leader>sm', function() M.setBuf() end)
 vim.keymap.set('n', '<leader>ww', function() M.MakeWin() end)
