@@ -1,12 +1,13 @@
 local conf = require("telescope.config").values
 local action_state = require "telescope.actions.state"
 local sorters = require "telescope.sorters"
+local previewer = require "telescope.previewers"
+local layouts = require "telescope.pickers.layout_strategies"
 local actions = require "telescope.actions"
 local finders = require "telescope.finders"
 local themes = require "telescope.themes"
 local pickers = require "telescope.pickers"
 local M = {}
-
 
 -- need the ability to find a file that you want to reference
 -- or
@@ -18,43 +19,65 @@ local M = {}
 -- set a mark at location to reference
 
 
-local function onPrev(prompt_bufnr)
-  actions.move_selection_previous(prompt_bufnr)
-  local entry = action_state.get_selected_entry()
-  print(vim.inspect(entry))
-  local markInfo = vim.api.nvim_get_mark(entry[1], {})
-  -- vim.api.nvim_buf_set_mark(markInfo[3], 'R', markInfo[2], 0, {})
-  if (vim.api.nvim_get_var("haveWin") == true) then
-    M.closeWin()
-  end
-  M.MakeWin(entry[1])
+
+M.floatingList = function(data)
+  local width = 40
+  print('data[1] in floating list', data[1])
+  M.makeWin(data[1], {relative='editor', col = width + 10})
+
+
+  local height = #data
+  local bufnr = vim.api.nvim_create_buf(false, true)
+  local win_id = vim.api.nvim_open_win(bufnr, true, {
+    relative = "cursor",
+    row = 1,
+    col = 1,
+    width = width,
+    height = height,
+    style = "minimal",
+    border = "none",
+  })
+  vim.keymap.set({ 'n', 'i' }, "<CR>", function() M.selectItem(bufnr) end, { buffer = bufnr })
+  vim.keymap.set({ 'i', 'n' }, "<up>", function() M.move(bufnr, 'up') end, { buffer = bufnr })
+  vim.keymap.set({ 'i', 'n' }, "<down>", function() M.move(bufnr, 'down') end, { buffer = bufnr })
+
+  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, data)
+
+  return {win_id,bufnr}
+  
 end
 
-local function onNext(prompt_bufnr)
-  actions.move_selection_next(prompt_bufnr)
-  local entry = action_state.get_selected_entry()
-  print(vim.inspect(entry))
-  local markInfo = vim.api.nvim_get_mark(entry[1], {})
-  -- vim.api.nvim_buf_set_mark(markInfo[3], 'R', markInfo[2], 0, {})
-  if (vim.api.nvim_get_var("haveWin") == true) then
-    M.closeWin()
+M.move = function(bufnr, direction)
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local height = vim.api.nvim_win_get_height(0)
+  print('cursor in move',vim.inspect(cursor),'height ', vim.inspect(height))
+  if direction == 'up' and cursor[1] >= 2  then
+    vim.api.nvim_win_set_cursor(0, { cursor[1] - 1, cursor[2] })
+  elseif direction == 'down' and cursor[1] < height then
+    vim.api.nvim_win_set_cursor(0, { cursor[1] + 1, cursor[2] })
   end
-  M.MakeWin(entry{1})
+  M.hoverOver(bufnr)
 end
 
-local function onEnter(prompt_bufnr)
-  if (vim.api.nvim_get_var("haveWin") == true) then
+M.hoverOver = function(bufnr)
+  local line = vim.fn.line('.')
+  local lineContent = vim.api.nvim_buf_get_lines(bufnr, line-1,line, false)[1]
+  print('line in hoverOver', line)
+  if (vim.api.nvim_get_var('haveWin')) then
     M.closeWin()
+  else
+
   end
-  local entry = action_state.get_selected_entry()
-  print('ENTRY',vim.inspect(entry))
-  local markInfo = vim.api.nvim_get_mark(entry[1], {})
-  -- vim.api.nvim_buf_set_mark(markInfo[3], 'R', markInfo[2], 0, {})
-  actions.close(prompt_bufnr)
-  M.MakeWin(entry[1])
+  M.makeWin(tostring(lineContent), {relative = 'win', col = 5 + vim.api.nvim_win_get_width(0)})
 end
 
-
+M.selectItem = function(bufnr)
+  local line = vim.fn.line('.')
+  vim.api.nvim_win_close(0, true)
+  local lineContent = vim.api.nvim_buf_get_lines(bufnr, line-1,line, false)[1]
+  M.makeWin(tostring(lineContent),{relative = 'editor'})
+  return lineContent
+end
 
 
 M.setBuf = function()
@@ -66,8 +89,8 @@ end
 
 -- get the mark and buffer to view in the window
 local function getBuf(mark)
-  print(vim.inspect(mark))
-  local markLocation = vim.api.nvim_get_mark(mark, {}) -- row, col, buffer, bufferName
+  print('getBuf mark', vim.inspect(mark))
+  local markLocation = vim.api.nvim_get_mark(tostring(mark), {}) -- row, col, buffer, bufferName
   local buffer = markLocation[3]
   vim.api.nvim_set_var('refBuf', buffer)
 end
@@ -87,63 +110,39 @@ end
 
 M.closeWin = function()
   local win = vim.api.nvim_get_var('refWin')
-  print(win)
   vim.api.nvim_win_close(win, true)
   vim.api.nvim_set_var('refWin', nil)
   vim.api.nvim_set_var('haveWin', false)
 end
 
-M.TeleMark = function(opts)
+local function getResults()
   local marks = vim.api.nvim_exec2('marks', { output = true })
-  print(marks.output)
+  -- local marks = vim.fn.getmarklist()
 
   local results = {}
-
   for m in string.gmatch(marks.output, "([^\r\n]+)") do
     local str = string.match(m, '^%s(%w)')
-    print(str)
     if str then
       if string.len(str) > 1 then
-        -- print('too long',str)
       elseif string.match(str, "[0-9A-Z]") and vim.api.nvim_get_mark(str, {}) then
-        local b = {}
-        local buf = vim.api.nvim_get_mark(str, {})
-        b.mark = buf[1]
-        b.row = buf[2]
-        b.buffer = buf[3]
-        b.bufferName = buf[4]
-
-        -- table.insert(results,{str,buf[1],buf[3]})-- mark name, row, buffer
-        table.insert(results, str) -- mark name, row, buffer
-      else
-        -- print('wrong format',str)
+        table.insert(results, str)
       end
     end
   end
-
-  local opts = {
-    finder = finders.new_table(results),
-    sorter = require"telescope".generic_sorter,
-
-    attach_mappings = function(prompt_bufnr, map)
-      map("i", "<UP>, onNext")
-      map("n", "<UP>, onNext")
-      map("i", "<DOWN>, onPrev")
-      map("n", "<DOWN>, onPrev")
-      map("i", "<CR>", onEnter)
-      map("n", "<CR>", onEnter)
-      return true
-    end
-  }
-
-  local marks = pickers.new(opts)
-  marks:find()
+  return results
 end
 
+M.listSelect = function()
+  local data = getResults()
+  print('data listSelect', vim.inspect(data))
+  print('data[0] listSelect', vim.inspect(data[1]))
+  local lineContent = M.floatingList(data)
+end
 
 vim.api.nvim_set_var('haveWin', false)
 
-M.MakeWin = function(mark, opts)
+M.makeWin = function(mark, opts)
+  print('makeWin mark', mark)
   if mark == "" then
     getBuf("R")
   else
@@ -153,12 +152,13 @@ M.MakeWin = function(mark, opts)
 
   if vim.api.nvim_get_var('haveWin') then
     print('window already exists')
+    M.closeWin()
+    M.makeWin(mark,opts)
   else
-    opts = opts or {}
     local defaults = {
-      relative = 'cursor',
+      relative = 'editor',
       row = -2,
-      col = 1,
+      col = 50,
       title = 'Reference',
       width = 80,
       height = 15,
@@ -167,10 +167,12 @@ M.MakeWin = function(mark, opts)
       'SW',
       border = 'none'
     }
-    -- opts = vim.tbl_deep_extend(force, defaults, opts)
+
+    opts = vim.tbl_extend('keep',opts,defaults)
     local buffer = vim.api.nvim_get_var('refBuf')
     local win = vim.api.nvim_open_win(buffer, false,
-      defaults)
+      opts)
+    print('relative option = ', opts.relative)
     vim.api.nvim_set_var('haveWin', true)
     vim.api.nvim_set_var('refWin', win)
   end
@@ -180,6 +182,8 @@ vim.keymap.set('n', '<leader>ww', function() M.MakeWin("R") end)
 vim.keymap.set('n', '<leader>we', function() M.winToggle() end)
 vim.keymap.set('n', '<leader>wc', function() M.closeWin() end)
 vim.keymap.set('n', '<leader>tm', function() M.TeleMark({ {} }) end)
+vim.keymap.set('n', '<leader>f', function() M.listSelect() end)
+
 return M
 
 --
