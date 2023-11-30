@@ -21,14 +21,18 @@ local M = {}
 
 
 M.floatingList = function(opts, data)
+  -- displays floating list, creates autocommands to keep variables consistent and removes the augroup when closed.
+  if #data == 0 then
+    print('No marks found')
+    return
+  end
   local width = 40
   local color = vim.api.nvim_exec2('colo', { output = true })
   local bufnr = vim.api.nvim_create_buf(false, true)
   local cbuf = vim.fn.bufnr('%')
-
-
   local height = #data
-  local win_id = vim.api.nvim_open_win(bufnr, true, {
+
+  local floatingListDefaults = {
     relative = "cursor",
     row = 1,
     col = 1,
@@ -37,61 +41,78 @@ M.floatingList = function(opts, data)
     style = 'minimal',
     anchor = 'NW',
     border = { "▄", "▄", "▄", "█", "▀", "▀", "▀", "█" },
-  })
+  }
+  --If opts.floatinglist doesn't exist, assume provided opts is meant to be opts.floatinglist and fill with saved defaults where needed.
+  if vim.api.nvim_eval('exists("opts.floatinglist")') == 0 then
+    local optsBackup = vim.api.nvim_get_var('rewinOpts')
+    opts.floatinglist = vim.tbl_deep_extend('keep', optsBackup.floatinglist, floatingListDefaults)
+  end
 
-  local groupId = vim.api.nvim_create_augroup('floatListGroup',{})
+  local win_id = vim.api.nvim_open_win(bufnr, true, opts.floatinglist)
 
-  vim.api.nvim_create_autocmd({ 'WinClosed' },
-    { command = "let g:haveWin='false'", group=groupId,buffer = bufnr })
-  vim.api.nvim_create_autocmd({ 'WinClosed' },
-    { command = "let g:haveWin='false'", group=groupId,buffer = cbuf })
-  vim.api.nvim_create_autocmd({ 'BufCreate','BufNew','CursorMoved' }, { command = "set winblend=30 | echo 'bufnr'", group=groupId,buffer = bufnr })
-  vim.api.nvim_create_autocmd({ 'BufNew','BufCreate','CursorMoved' }, { command = "set winblend=30 | echo 'cbuf'", group=groupId,buffer = cbuf })
+  local groupId = vim.api.nvim_create_augroup('floatListGroup', {})
+
+  -- vim.api.nvim_create_autocmd({ 'WinClosed' },
+  --   { command = "let g:haveWin='false' | echo 'bufnr sets falses '", group = groupId, buffer = bufnr })
+  vim.api.nvim_create_autocmd({ 'WinLeave' },
+    {
+      callback = function()
+        vim.api.nvim_del_augroup_by_name('floatListGroup')
+        vim.api.nvim_win_close(win_id, true)
+        M.closeWin()
+      end,
+      group = groupId,
+      buffer = bufnr,
+    })
+  vim.api.nvim_create_autocmd({ 'BufCreate', 'WinNew', 'BufNew', 'CursorMoved' },
+    { command = "set winblend=30", group = groupId, buffer = bufnr })
   vim.api.nvim_create_autocmd({ 'CursorMoved' }, {
     callback = function()
-      vim.api.nvim_exec('set winblend=30',{})
+      vim.api.nvim_exec('set winblend=30', {})
       local line = vim.fn.line('.')
       local lineContent = vim.api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1]
       if vim.api.nvim_get_var('haveWin') == true then
         M.closeWin()
       end
-      M.makeWin(lineContent, {})
-      -- vim.api.nvim_cmd({cmd='set winblend=70'},{})
-      vim.api.nvim_set_var('haveWin', true)
+      M.makeWin(lineContent, opts)
     end,
-    buffer=bufnr
+    buffer = bufnr
   })
-  vim.keymap.set({ 'n', 'i' }, "<CR>", function() M.selectItem(bufnr) end, { buffer = bufnr })
+  vim.keymap.set({ 'n', 'i' }, "<CR>", function() M.selectItem() end, { buffer = bufnr })
 
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, data)
 
   return { win_id, bufnr }
 end
 
-M.selectItem = function(bufnr)
+M.selectItem = function()
+  -- selects the current item from the list, default mapping is <CR>
+
+  vim.api.nvim_del_augroup_by_name('floatListGroup')
   local line = vim.fn.line('.')
   vim.api.nvim_win_close(0, true)
   vim.api.nvim_set_var('haveWin', true)
-  vim.api.nvim_del_augroup_by_name('floatListGroup')
 end
 
 
 M.setBuf = function()
+  -- set mark "R" at the current cursor location
   local cursor = vim.api.nvim_win_get_cursor(0)
   local line = cursor[1]
   local ok = vim.api.nvim_buf_set_mark(0, 'R', line, 1, {})
   return true
 end
 
--- get the mark and buffer to view in the window
 local function getBuf(mark)
+  -- get the mark and buffer to view in the window
   local markLocation = vim.api.nvim_get_mark(tostring(mark), {}) -- row, col, buffer, bufferName
   local buffer = markLocation[3]
   vim.api.nvim_set_var('refBuf', buffer)
 end
 
--- once window is open, enter or leave the window
-M.winSwitch = function(opts)
+M.winSwitch = function()
+  -- Enter floating window, if already in it then leave. If there is no window open the default
+  opts = vim.api.nvim_get_var('rewinOpts')
   local gotRef = vim.api.nvim_eval('exists("g:refWin")')
   if gotRef == 0 then
     M.listSelect(opts)
@@ -100,8 +121,8 @@ M.winSwitch = function(opts)
   local win = vim.g.refWin
   if (vim.api.nvim_get_current_win() == win) then
     vim.api.nvim_set_current_win(vim.api.nvim_get_var('winSave'))
-  elseif (win == nil) then
-    M.MakeWin("R")
+  elseif (win == nil) or (win == false) then
+    M.makeWin("R", opts)
   else
     vim.api.nvim_set_var('winSave', vim.api.nvim_get_current_win())
     vim.api.nvim_set_current_win(win)
@@ -109,9 +130,12 @@ M.winSwitch = function(opts)
 end
 
 M.closeWin = function()
+  -- close window if exists, if not do nothing.
+  if vim.api.nvim_eval('exists("g:refWin")') == 0 then
+    return
+  end
   local win = vim.g.refWin
   if win == false then
-    
   else
     vim.api.nvim_win_close(win, true)
     vim.api.nvim_set_var('refWin', false)
@@ -120,8 +144,8 @@ M.closeWin = function()
 end
 
 local function getResults()
+  -- filter the marks and return only the ones in A-Z0-9
   local marks = vim.api.nvim_exec2('marks', { output = true })
-  -- local marks = vim.fn.getmarklist()
 
   local results = {}
   for m in string.gmatch(marks.output, "([^\r\n]+)") do
@@ -137,57 +161,14 @@ local function getResults()
 end
 
 M.listSelect = function(opts)
+  -- get list of marks and pass to floatingList
   local data = getResults()
-  local lineContent = M.floatingList(opts, data)
+  M.floatingList(opts, data)
 end
 
 
 M.makeWin = function(mark, opts)
-  if mark == "" then
-    getBuf("R")
-  else
-    getBuf(mark)
-  end
-
-
-  local defaults = {
-    relative = 'cursor',
-    row = -2,
-    col = 50,
-    title = 'Reference',
-    width = 80,
-    height = 15,
-    focusable = false,
-    anchor = 'SW',
-    border = 'none',
-    style = 'minimal'
-  }
-
-  opts = vim.tbl_extend('keep', opts, defaults)
-  if vim.api.nvim_get_var('haveWin') == true then
-    M.closeWin()
-    M.makeWin(mark, opts)
-  end
-  local buffer = vim.api.nvim_get_var('refBuf')
-  local cbuf = vim.fn.bufnr('%')
-  vim.api.nvim_create_augroup('madeWin',{})
-  vim.api.nvim_create_autocmd({'WinNew'}, {command = "set winblend=45",group=madeWin,buffer=cbuf})
-  vim.api.nvim_create_autocmd({'WinNew'}, {command = "set winblend=45",group=madeWin,buffer=buffer})
-  vim.api.nvim_create_autocmd({ 'BufDelete' },
-    { command = "let g:haveWin='false' | let g:refWin='false'", buffer = buffer })
-  vim.api.nvim_create_autocmd({ 'WinClosed' },
-    { command = "let g:haveWin='false' | let g:refwin='false'", buffer = buffer })
-  local win = vim.api.nvim_open_win(buffer, false,
-    opts)
-  vim.api.nvim_set_var('haveWin', true)
-  vim.api.nvim_set_var('refWin', win)
-  vim.api.nvim_del_augroup_by_name('madeWin')
-  print('we set refWin in makeWin to: ', vim.g.refWin)
-end
-
-M.setup = function(opts)
-
-  local defaults = {
+  local makeWinDefaults = {
     relative = 'cursor',
     row = -2,
     col = 50,
@@ -199,10 +180,93 @@ M.setup = function(opts)
     border = 'single',
     style = 'minimal'
   }
-  print('exists?', vim.api.nvim_eval('exists("g:haveWin")'))
+
+  if vim.api.nvim_win_get_config(0).relative ~= '' and vim.api.nvim_win_get_config(0).focusable == false then
+    print('Cannot create new reference window from a floating window.')
+    return
+  end
+  if vim.api.nvim_eval('exists("opts.makewin")') == 0 then
+    local optsBackup = vim.api.nvim_get_var('rewinOpts')
+
+    opts.makewin = vim.tbl_extend('keep', optsBackup.makewin, makeWinDefaults)
+  end
+  if mark == "" then
+    getBuf("R")
+  else
+    getBuf(mark)
+  end
+
+
+  -- refresh the window if already open.
+  if vim.api.nvim_get_var('haveWin') == true then
+    M.closeWin()
+    -- M.makeWin(mark, opts)
+    -- return
+  end
+  local buffer = vim.api.nvim_get_var('refBuf')
+  local cbuf = vim.fn.bufnr('%')
+
+
+  -- groups only active during this function, group is then deleted.
+  vim.api.nvim_create_augroup('madeWin', {})
+  vim.api.nvim_create_autocmd({ 'WinNew', 'BufCreate' }, { command = "set winblend=45", group = madeWin, buffer = cbuf })
+  vim.api.nvim_create_autocmd({ 'WinNew', 'BufCreate' },
+    { command = "set winblend=45", group = madeWin, buffer = buffer })
+  vim.api.nvim_create_autocmd({ 'BufDelete' },
+    { command = "let g:haveWin='false' | let g:refWin='false'", buffer = buffer })
+  vim.api.nvim_create_autocmd({ 'WinClosed' },
+    { command = "let g:haveWin='false' | let g:refwin='false'", buffer = buffer })
+
+  local win = vim.api.nvim_open_win(buffer, false,
+    opts.makewin)
+
+  vim.api.nvim_set_var('haveWin', true)
+  vim.api.nvim_set_var('refWin', win)
+  vim.api.nvim_del_augroup_by_name('madeWin')
+end
+
+M.setup = function(opts)
+  local makeWinDefaults = {
+    relative = 'cursor',
+    row = -2,
+    col = 50,
+    title = 'Reference',
+    width = 80,
+    height = 15,
+    focusable = false,
+    anchor = 'SW',
+    border = 'single',
+    style = 'minimal'
+  }
+
+  local floatingListDefaults = {
+    relative = "cursor",
+    row = 1,
+    col = 1,
+    width = 30,
+    height = 13,
+    style = 'minimal',
+    anchor = 'NW',
+    border = { "▄", "▄", "▄", "█", "▀", "▀", "▀", "█" },
+  }
+
+
+  if vim.api.nvim_eval('exists("opts.makewin")') == 0 then
+    opts.makewin = makeWinDefaults
+  else
+    opts.makewin = vim.tbl_deep_extend('keep', opts.makewin, makeWinDefaults)
+  end
+  if vim.api.nvim_eval('exists("opts.floatinglist")') == 0 then
+    opts.floatinglist = floatingListDefaults
+  else
+    opts.floatinglist = vim.tbl_deep_extend('keep', floatingListOpts, floatingListDefaults)
+  end
+
+  vim.api.nvim_set_var('rewinOpts', opts)
+
+
   if vim.api.nvim_eval('exists("g:haveWin")') == 1 then
     if vim.g.haveWin == true then
-      print('haveWin is true')
       M.closeWin()
       M.makeWin(vim.g.refBuf, opts)
     else
@@ -215,21 +279,14 @@ M.setup = function(opts)
   end
 
 
-  -- if vim.g.haveWin == nil then
-  --   vim.api.nvim_set_var('haveWin', false)
-  -- elseif vim.g.haveWin == true then
-  --   M.closeWin()
-  --   print('lebuf',vim.g.refBuf)
-  --   M.makeWin(vim.g.refBuf,{})
-  -- end
-  opts = vim.tbl_deep_extend('keep', opts, defaults)
+
   vim.keymap.set('n', '<leader>sm', function() M.setBuf() end)
   vim.keymap.set('n', '<leader>ww', function() M.makeWin("R", opts) end)
-  vim.keymap.set('n', '<leader>we', function() M.winSwitch(opts) end)
+  vim.keymap.set('n', '<leader>we', function() M.winSwitch() end)
   vim.keymap.set('n', '<leader>wc', function() M.closeWin() end)
+
   vim.keymap.set('n', '<leader>f', function() M.listSelect(opts) end)
 end
-M.setup({})
 return M
 
 --
