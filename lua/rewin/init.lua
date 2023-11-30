@@ -154,6 +154,9 @@ local function getResults()
 
   for m in string.gmatch(marks.output, "([^\r\n]+)") do
     if vim.tbl_contains(done, m) then goto continue end
+    for i in string.gmatch(m, "([%s])") do
+      print(i)
+    end
 
     local str = string.match(m, '^%s(%w)')
     table.insert(done, m)
