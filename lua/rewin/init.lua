@@ -57,9 +57,9 @@ M.floatingList = function(opts, data)
   vim.api.nvim_create_autocmd({ 'WinLeave' },
     {
       callback = function()
-        vim.api.nvim_del_augroup_by_name('floatListGroup')
-        vim.api.nvim_win_close(win_id, true)
         M.closeWin()
+        vim.api.nvim_win_close(win_id, true)
+        vim.api.nvim_del_augroup_by_name('floatListGroup')
       end,
       group = groupId,
       buffer = bufnr,
@@ -107,6 +107,7 @@ local function getBuf(mark)
   -- get the mark and buffer to view in the window
   local markLocation = vim.api.nvim_get_mark(tostring(mark), {}) -- row, col, buffer, bufferName
   local buffer = markLocation[3]
+  vim.api.nvim_set_var('refRow', markLocation[1])
   vim.api.nvim_set_var('refBuf', buffer)
 end
 
@@ -145,17 +146,24 @@ end
 
 local function getResults()
   -- filter the marks and return only the ones in A-Z0-9
+  -- TODO: need to filter and remove the marks that are auto set, perhaps by them having column =0?
   local marks = vim.api.nvim_exec2('marks', { output = true })
 
   local results = {}
+  local done = {}
+
   for m in string.gmatch(marks.output, "([^\r\n]+)") do
+    if vim.tbl_contains(done, m) then goto continue end
+
     local str = string.match(m, '^%s(%w)')
+    table.insert(done, m)
     if str then
       if string.len(str) > 1 then
       elseif string.match(str, "[0-9A-Z]") and vim.api.nvim_get_mark(str, {}) then
         table.insert(results, str)
       end
     end
+    ::continue::
   end
   return results
 end
@@ -192,6 +200,9 @@ M.makeWin = function(mark, opts)
   end
   if mark == "" then
     getBuf("R")
+  -- elseif mark then -- see if mark is more than a single char
+  --   print('Mark must only be one character')
+  --   return
   else
     getBuf(mark)
   end
@@ -204,6 +215,7 @@ M.makeWin = function(mark, opts)
     -- return
   end
   local buffer = vim.api.nvim_get_var('refBuf')
+  local row = vim.api.nvim_get_var('refRow')
   local cbuf = vim.fn.bufnr('%')
 
 
@@ -219,6 +231,13 @@ M.makeWin = function(mark, opts)
 
   local win = vim.api.nvim_open_win(buffer, false,
     opts.makewin)
+  if (vim.api.nvim_win_get_config(0).relative ~= '' and buffer == vim.api.nvim_win_get_buf(0)) or row > vim.api.nvim_buf_line_count(buffer) then
+    print('it rel and the same')
+  else
+    print('win and row',win,row)
+
+    -- vim.api.nvim_win_set_cursor(win, { row, 0 })
+  end
 
   vim.api.nvim_set_var('haveWin', true)
   vim.api.nvim_set_var('refWin', win)
