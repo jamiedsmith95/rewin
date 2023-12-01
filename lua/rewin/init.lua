@@ -1,14 +1,5 @@
 local M = {}
 
--- need the ability to find a file that you want to reference
--- or
--- need to be able to create a point within current buffer to reference later.
-
--- or just show list of marks, can make wrapper function if marks are not used much
--- neet to be able to create small floating window with the reference buffer at the point the reference was made
-
--- set a mark at location to reference
-
 
 
 M.floatingList = function(opts, data)
@@ -33,6 +24,7 @@ M.floatingList = function(opts, data)
     anchor = 'NW',
     border = { "▄", "▄", "▄", "█", "▀", "▀", "▀", "█" },
   }
+
   --If opts.floatinglist doesn't exist, assume provided opts is meant to be opts.floatinglist and fill with saved defaults where needed.
   if vim.api.nvim_eval('exists("opts.floatinglist")') == 0 then
     local optsBackup = vim.api.nvim_get_var('rewinOpts')
@@ -40,11 +32,8 @@ M.floatingList = function(opts, data)
   end
 
   local win_id = vim.api.nvim_open_win(bufnr, true, opts.floatinglist)
-
   local groupId = vim.api.nvim_create_augroup('floatListGroup', {})
 
-  -- vim.api.nvim_create_autocmd({ 'WinClosed' },
-  --   { command = "let g:haveWin='false' | echo 'bufnr sets falses '", group = groupId, buffer = bufnr })
   vim.api.nvim_create_autocmd({ 'WinLeave' },
     {
       callback = function()
@@ -56,7 +45,7 @@ M.floatingList = function(opts, data)
       buffer = bufnr,
     })
   vim.api.nvim_create_autocmd({ 'BufCreate', 'WinNew', 'BufNew', 'CursorMoved' },
-    { command = "set winblend=0", group = groupId, buffer = bufnr })
+    { command = "set winblend=0 | call nvim_win_set_hl_ns(0,0)", group = groupId, buffer = bufnr })
   vim.api.nvim_create_autocmd({ 'CursorMoved' }, {
     callback = function()
       vim.api.nvim_exec('set winblend=0', {})
@@ -123,7 +112,7 @@ end
 
 M.closeWin = function()
   -- close window if exists, if not do nothing.
-  if vim.api.nvim_eval('exists("g:refWin")') == 0 then
+  if vim.api.nvim_eval('exists("g:refWin")') == 0 or vim.g.haveWin == false then
     return
   end
   local win = vim.g.refWin
@@ -136,20 +125,17 @@ M.closeWin = function()
 end
 
 local function getResults()
-  -- filter the marks and return only the ones in A-Z0-9
+  -- filter the marks and return only the ones in A-Z01
   -- TODO: need to filter and remove the marks that are auto set, perhaps by them having column =0?
   local marks = vim.api.nvim_exec2('marks', { output = true })
-  -- print(vim.inspect(marks.output))
 
   local results = {}
   local rowAndFiles = {}
   local bad = {}
   local all = {}
 
-  local count = 1
   for m in string.gmatch(marks.output, "([^\r\n]+)") do
-    -- if vim.tbl_contains(done, m) then goto continue end
-    local splitString = vim.split(m,'[%s]+')
+    local splitString = vim.split(m, '[%s]+')
 
     local str = splitString[2]
     local row = splitString[3]
@@ -157,40 +143,28 @@ local function getResults()
     local file = splitString[5]
 
 
-    -- if col == '0' then
-    --   print('skip')
-    --   bad = vim.tbl_deep_extend('force', bad, { str, row, file })
-    --   table.insert(bad, {count = {row,file}})
-    --   goto continue
-    -- elseif row and str and col then
-    -- else
-    --   print('one of these four isnt ', row, str, col)
-    --   goto continue
-    -- end
 
 
-    if string.match(str, "[A-Z]") and vim.api.nvim_get_mark(str, {}) then
-      print(str, row,col, file)
-      
-      local temp = { row , file  }
+    if string.match(str, "[A-Z01]") and vim.api.nvim_get_mark(str, {}) then
+
+      local temp = { row, file }
       if vim.tbl_contains(rowAndFiles, temp) then goto continue end
-      table.insert(rowAndFiles, {count=temp})
+      table.insert(rowAndFiles, { count = temp })
       temp = { str, row, file }
-      print('temp: ', vim.inspect(temp))
-      table.insert(all,{count=temp})
-      -- table.insert(results, str)
+      table.insert(all, { count = temp })
     end
     ::continue::
   end
 
-  -- local endRange = #rowAndFiles
   for idx, rowFile in pairs(rowAndFiles) do
     if vim.tbl_contains(bad, rowFile.count) then
---skip
+      --skip
     else
       table.insert(results, all[idx].count[1])
     end
   end
+  table.sort(results) 
+
   return results
 end
 
@@ -226,19 +200,19 @@ M.makeWin = function(mark, opts)
   end
   if mark == "" then
     getBuf("R")
-    -- elseif mark then -- see if mark is more than a single char
-    --   print('Mark must only be one character')
-    --   return
   else
     getBuf(mark)
   end
+  local marks = getResults()
+  if #marks == 0 then 
+    M.listSelect(opts)
+    return
+  end
 
 
-  -- refresh the window if already open.
+  --don't open window if there already is one, in the list selection the next autocommand trigger will open another.
   if vim.api.nvim_get_var('haveWin') == true then
     M.closeWin()
-    -- M.makeWin(mark, opts)
-    -- return
   end
   local buffer = vim.api.nvim_get_var('refBuf')
   local row = vim.api.nvim_get_var('refRow')
@@ -249,7 +223,7 @@ M.makeWin = function(mark, opts)
   vim.api.nvim_create_augroup('madeWin', {})
   vim.api.nvim_create_autocmd({ 'WinNew', 'BufCreate' }, { command = "set winblend=0", group = madeWin, buffer = cbuf })
   vim.api.nvim_create_autocmd({ 'WinNew', 'BufCreate' },
-    { command = "set winblend=0", group = madeWin, buffer = buffer })
+    { command = "set winblend=0 | call nvim_win_set_hl_ns(0,0)", group = madeWin, buffer = buffer })
   vim.api.nvim_create_autocmd({ 'BufDelete' },
     { command = "let g:haveWin='false' | let g:refWin='false'", buffer = buffer })
   vim.api.nvim_create_autocmd({ 'WinClosed' },
@@ -261,13 +235,10 @@ M.makeWin = function(mark, opts)
   local win = vim.api.nvim_open_win(buffer, false,
     opts.makewin)
   if (vim.api.nvim_win_get_config(0).relative ~= '' and buffer == vim.api.nvim_win_get_buf(0)) or row > vim.api.nvim_buf_line_count(buffer) then
-    print('it rel and the same')
     vim.api.nvim_del_current_line()
   elseif vim.api.nvim_eval("exists('#floatListGroup#WinLeave')") then
-    print('win and row', win, row)
-    vim.api.nvim_win_set_cursor(win, { row, 0 })
+    vim.api.nvim_win_set_cursor(win, { row, 1 })
   end
-
   vim.api.nvim_set_var('haveWin', true)
   vim.api.nvim_set_var('refWin', win)
   vim.api.nvim_del_augroup_by_name('madeWin')
