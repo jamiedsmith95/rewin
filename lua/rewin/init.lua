@@ -1,12 +1,3 @@
-local conf = require("telescope.config").values
-local action_state = require "telescope.actions.state"
-local sorters = require "telescope.sorters"
-local previewer = require "telescope.previewers"
-local layouts = require "telescope.pickers.layout_strategies"
-local actions = require "telescope.actions"
-local finders = require "telescope.finders"
-local themes = require "telescope.themes"
-local pickers = require "telescope.pickers"
 local M = {}
 
 -- need the ability to find a file that you want to reference
@@ -65,10 +56,10 @@ M.floatingList = function(opts, data)
       buffer = bufnr,
     })
   vim.api.nvim_create_autocmd({ 'BufCreate', 'WinNew', 'BufNew', 'CursorMoved' },
-    { command = "set winblend=30", group = groupId, buffer = bufnr })
+    { command = "set winblend=0", group = groupId, buffer = bufnr })
   vim.api.nvim_create_autocmd({ 'CursorMoved' }, {
     callback = function()
-      vim.api.nvim_exec('set winblend=30', {})
+      vim.api.nvim_exec('set winblend=0', {})
       local line = vim.fn.line('.')
       local lineContent = vim.api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1]
       if vim.api.nvim_get_var('haveWin') == true then
@@ -148,25 +139,57 @@ local function getResults()
   -- filter the marks and return only the ones in A-Z0-9
   -- TODO: need to filter and remove the marks that are auto set, perhaps by them having column =0?
   local marks = vim.api.nvim_exec2('marks', { output = true })
+  -- print(vim.inspect(marks.output))
 
   local results = {}
-  local done = {}
+  local rowAndFiles = {}
+  local bad = {}
+  local all = {}
 
+  local count = 1
   for m in string.gmatch(marks.output, "([^\r\n]+)") do
-    if vim.tbl_contains(done, m) then goto continue end
-    for i in string.gmatch(m, "([%s])") do
-      print(i)
-    end
+    -- if vim.tbl_contains(done, m) then goto continue end
+    local splitString = vim.split(m,'[%s]+')
 
-    local str = string.match(m, '^%s(%w)')
-    table.insert(done, m)
-    if str then
-      if string.len(str) > 1 then
-      elseif string.match(str, "[0-9A-Z]") and vim.api.nvim_get_mark(str, {}) then
-        table.insert(results, str)
-      end
+    local str = splitString[2]
+    local row = splitString[3]
+    local col = splitString[4]
+    local file = splitString[5]
+
+
+    -- if col == '0' then
+    --   print('skip')
+    --   bad = vim.tbl_deep_extend('force', bad, { str, row, file })
+    --   table.insert(bad, {count = {row,file}})
+    --   goto continue
+    -- elseif row and str and col then
+    -- else
+    --   print('one of these four isnt ', row, str, col)
+    --   goto continue
+    -- end
+
+
+    if string.match(str, "[A-Z]") and vim.api.nvim_get_mark(str, {}) then
+      print(str, row,col, file)
+      
+      local temp = { row , file  }
+      if vim.tbl_contains(rowAndFiles, temp) then goto continue end
+      table.insert(rowAndFiles, {count=temp})
+      temp = { str, row, file }
+      print('temp: ', vim.inspect(temp))
+      table.insert(all,{count=temp})
+      -- table.insert(results, str)
     end
     ::continue::
+  end
+
+  -- local endRange = #rowAndFiles
+  for idx, rowFile in pairs(rowAndFiles) do
+    if vim.tbl_contains(bad, rowFile.count) then
+--skip
+    else
+      table.insert(results, all[idx].count[1])
+    end
   end
   return results
 end
@@ -203,9 +226,9 @@ M.makeWin = function(mark, opts)
   end
   if mark == "" then
     getBuf("R")
-  -- elseif mark then -- see if mark is more than a single char
-  --   print('Mark must only be one character')
-  --   return
+    -- elseif mark then -- see if mark is more than a single char
+    --   print('Mark must only be one character')
+    --   return
   else
     getBuf(mark)
   end
@@ -224,22 +247,25 @@ M.makeWin = function(mark, opts)
 
   -- groups only active during this function, group is then deleted.
   vim.api.nvim_create_augroup('madeWin', {})
-  vim.api.nvim_create_autocmd({ 'WinNew', 'BufCreate' }, { command = "set winblend=45", group = madeWin, buffer = cbuf })
+  vim.api.nvim_create_autocmd({ 'WinNew', 'BufCreate' }, { command = "set winblend=0", group = madeWin, buffer = cbuf })
   vim.api.nvim_create_autocmd({ 'WinNew', 'BufCreate' },
-    { command = "set winblend=45", group = madeWin, buffer = buffer })
+    { command = "set winblend=0", group = madeWin, buffer = buffer })
   vim.api.nvim_create_autocmd({ 'BufDelete' },
     { command = "let g:haveWin='false' | let g:refWin='false'", buffer = buffer })
   vim.api.nvim_create_autocmd({ 'WinClosed' },
     { command = "let g:haveWin='false' | let g:refwin='false'", buffer = buffer })
 
+
+
+
   local win = vim.api.nvim_open_win(buffer, false,
     opts.makewin)
   if (vim.api.nvim_win_get_config(0).relative ~= '' and buffer == vim.api.nvim_win_get_buf(0)) or row > vim.api.nvim_buf_line_count(buffer) then
     print('it rel and the same')
-  else
-    print('win and row',win,row)
-
-    -- vim.api.nvim_win_set_cursor(win, { row, 0 })
+    vim.api.nvim_del_current_line()
+  elseif vim.api.nvim_eval("exists('#floatListGroup#WinLeave')") then
+    print('win and row', win, row)
+    vim.api.nvim_win_set_cursor(win, { row, 0 })
   end
 
   vim.api.nvim_set_var('haveWin', true)
@@ -285,6 +311,7 @@ M.setup = function(opts)
   end
 
   vim.api.nvim_set_var('rewinOpts', opts)
+
 
 
   if vim.api.nvim_eval('exists("g:haveWin")') == 1 then
