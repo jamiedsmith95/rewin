@@ -1,7 +1,7 @@
 ====================================================================================
                                                                   *rewin.nvim*
 This plugin allows you to open a small preview window to reference either a specific mark
-"R" or choose from a list of marks in the set A-Z0-9.
+"R" or choose from a list of marks in the set A-Z01.
 
                                                              *rewin.makeWin()*
 rewin.makeWin({mark},{opts})
@@ -66,10 +66,28 @@ Set the default marker "R" at current cursor location. This then acts as the
 default reference window. "R" will persist through deleting all marks during a
 session.
 
+                                                            *rewin.winClose()*
 
+rewin.winClose()
 
+Close the currently open reference window.
 
+                                                               *rewin.setup()*
 
+rewin.setup({opts})
+
+Setup function allows the setting of options for makeWin() and listSelect(),
+opts can have a table of options for each where settings for the windows can
+be configured
+
+opts = {
+  floatinglist = {
+
+  }
+  makewin = {
+
+  }
+}
 
 
 
