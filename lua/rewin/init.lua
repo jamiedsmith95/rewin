@@ -234,7 +234,7 @@ M.makeWin = function(mark, opts)
 
   local win = vim.api.nvim_open_win(buffer, false,
     opts.makewin)
-  if (vim.api.nvim_win_get_config(0).relative ~= '' and buffer == vim.api.nvim_win_get_buf(0)) or row > vim.api.nvim_buf_line_count(buffer) then
+  if (vim.api.nvim_win_get_config(0).relative ~= '' and (buffer == vim.api.nvim_win_get_buf(0)) or row > vim.api.nvim_buf_line_count(buffer)) then
     vim.api.nvim_del_current_line()
   elseif vim.api.nvim_eval("exists('#floatListGroup#WinLeave')") then
     vim.api.nvim_win_set_cursor(win, { row, 1 })
