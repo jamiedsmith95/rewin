@@ -13,7 +13,7 @@ rewin provides a convenient way to reference a place in your filesystem without 
 
 ## Installation
 
-Install as with any other plugin:
+Install as with any other plugin, packer for example:
 
 <!-- setup:start -->
 
@@ -39,7 +39,7 @@ require("rewin").setup {
 
 ```
 The main options that can be set are for the reference window itself and for the floating list.
-If not set the default values are used.
+These are optional and if not set default values are used.
 
 
 

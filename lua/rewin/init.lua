@@ -146,7 +146,7 @@ local function getResults()
 
 
 
-    if string.match(str, "[A-Z01]") and vim.api.nvim_get_mark(str, {}) then
+    if string.match(str, "[A-Z01]") and vim.api.nvim_get_mark(str, {})[4] ~= {0,0,0,''}  then
 
       local temp = { row, file }
       if vim.tbl_contains(rowAndFiles, temp) then goto continue end
