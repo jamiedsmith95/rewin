@@ -22,7 +22,7 @@ M.floatingList = function(opts, data)
     height = height,
     style = 'minimal',
     anchor = 'NW',
-    border = { "▄", "▄", "▄", "█", "▀", "▀", "▀", "█" },
+    border =  'single'
   }
 
   --If opts.floatinglist doesn't exist, assume provided opts is meant to be opts.floatinglist and fill with saved defaults where needed.
@@ -45,10 +45,10 @@ M.floatingList = function(opts, data)
       buffer = bufnr,
     })
   vim.api.nvim_create_autocmd({ 'BufCreate', 'WinNew', 'BufNew', 'CursorMoved' },
-    { command = "set winblend=0 | call nvim_win_set_hl_ns(0,0)", group = groupId, buffer = bufnr })
+    { command = "set winblend=30 | call nvim_win_set_hl_ns(0,0)", group = groupId, buffer = bufnr })
   vim.api.nvim_create_autocmd({ 'CursorMoved' }, {
     callback = function()
-      vim.api.nvim_exec('set winblend=0', {})
+      vim.api.nvim_exec('set winblend=30', {})
       local line = vim.fn.line('.')
       local lineContent = vim.api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1]
       if vim.api.nvim_get_var('haveWin') == true then
@@ -146,7 +146,8 @@ local function getResults()
 
 
 
-    if string.match(str, "[A-Z01]") and vim.api.nvim_get_mark(str, {})[4] ~= {0,0,0,''}  then
+    if row == "1" and tonumber(col) < 5 then goto continue end -- skip auto placed marks
+    if string.match(str, "[A-Z01]") and vim.api.nvim_get_mark(str, {}) then
 
       local temp = { row, file }
       if vim.tbl_contains(rowAndFiles, temp) then goto continue end
@@ -221,10 +222,10 @@ M.makeWin = function(mark, opts)
 
 
   -- groups only active during this function, group is then deleted.
-  vim.api.nvim_create_augroup('madeWin', {})
-  vim.api.nvim_create_autocmd({ 'WinNew', 'BufCreate' }, { command = "set winblend=0", group = madeWin, buffer = cbuf })
+  madeWin = vim.api.nvim_create_augroup('madeWin', {})
+  vim.api.nvim_create_autocmd({ 'WinNew', 'BufCreate' }, { command = "set winblend=30", group = madeWin, buffer = cbuf })
   vim.api.nvim_create_autocmd({ 'WinNew', 'BufCreate' },
-    { command = "set winblend=0 | call nvim_win_set_hl_ns(0,0)", group = madeWin, buffer = buffer })
+    { command = "set winblend=30 | call nvim_win_set_hl_ns(0,0)", group = madeWin, buffer = buffer })
   vim.api.nvim_create_autocmd({ 'BufDelete' },
     { command = "let g:haveWin='false' | let g:refWin='false'", buffer = buffer })
   vim.api.nvim_create_autocmd({ 'WinClosed' },
@@ -236,7 +237,6 @@ M.makeWin = function(mark, opts)
   local win = vim.api.nvim_open_win(buffer, false,
     opts.makewin)
   if (vim.api.nvim_win_get_config(0).relative ~= '' and (buffer == vim.api.nvim_win_get_buf(0)) or row > vim.api.nvim_buf_line_count(buffer)) then
-    vim.api.nvim_del_current_line()
   elseif vim.api.nvim_eval("exists('#floatListGroup#WinLeave')") then
     vim.api.nvim_win_set_cursor(win, { row, 1 })
   end
