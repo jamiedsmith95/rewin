@@ -34,7 +34,7 @@ M.floatingList = function(opts, data)
   local win_id = vim.api.nvim_open_win(bufnr, true, opts.floatinglist)
   local groupId = vim.api.nvim_create_augroup('floatListGroup', {})
 
-  vim.api.nvim_create_autocmd({ 'WinLeave' },
+  vim.api.nvim_create_autocmd({ 'WinLeave', 'WinClosed' },
     {
       callback = function()
         M.closeWin()
@@ -58,7 +58,8 @@ M.floatingList = function(opts, data)
     end,
     buffer = bufnr
   })
-  vim.keymap.set({ 'n', 'i' }, "<CR>", function() M.selectItem() end, { buffer = bufnr })
+  vim.keymap.set({ 'n', 'i' }, "<Plug>selectItem",function() M.selectItem() end, {buffer = bufnr })
+  -- vim.keymap.set({ 'n', 'i' }, "<CR>", function() M.selectItem() end, { buffer = bufnr })
 
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, data)
 
@@ -234,7 +235,7 @@ M.makeWin = function(mark, opts)
 
   local win = vim.api.nvim_open_win(buffer, false,
     opts.makewin)
-  if (vim.api.nvim_win_get_config(0).relative ~= '' and buffer == vim.api.nvim_win_get_buf(0)) or row > vim.api.nvim_buf_line_count(buffer) then
+  if (vim.api.nvim_win_get_config(0).relative ~= '' and (buffer == vim.api.nvim_win_get_buf(0)) or row > vim.api.nvim_buf_line_count(buffer)) then
     vim.api.nvim_del_current_line()
   elseif vim.api.nvim_eval("exists('#floatListGroup#WinLeave')") then
     vim.api.nvim_win_set_cursor(win, { row, 1 })
@@ -300,12 +301,13 @@ M.setup = function(opts)
 
 
 
-  vim.keymap.set('n', '<leader>sm', function() M.setBuf() end)
-  vim.keymap.set('n', '<leader>ww', function() M.makeWin("R", opts) end)
-  vim.keymap.set('n', '<leader>we', function() M.winSwitch() end)
-  vim.keymap.set('n', '<leader>wc', function() M.closeWin() end)
+  -- vim.keymap.set('n', '<leader>sm', function() M.setBuf() end)
+  vim.keymap.set('n', '<Plug>setBuf', function() M.setBuf() end)
+  vim.keymap.set('n', '<Plug>makeWin', function() M.makeWin("R", opts) end)
+  vim.keymap.set('n', '<Plug>winSwitch', function() M.winSwitch() end)
+  vim.keymap.set('n', '<Plug>closeWin', function() M.closeWin() end)
 
-  vim.keymap.set('n', '<leader>f', function() M.listSelect(opts) end)
+  vim.keymap.set('n', '<Plug>listSelect', function() M.listSelect(opts) end)
 end
 return M
 
