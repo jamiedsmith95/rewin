@@ -3,4 +3,6 @@ rewin.makeWin()	rewin.txt	/*rewin.makeWin()*
 rewin.nvim	rewin.txt	/*rewin.nvim*
 rewin.selectItem()	rewin.txt	/*rewin.selectItem()*
 rewin.setBuf()	rewin.txt	/*rewin.setBuf()*
+rewin.setup()	rewin.txt	/*rewin.setup()*
+rewin.winClose()	rewin.txt	/*rewin.winClose()*
 rewin.winSwitch()	rewin.txt	/*rewin.winSwitch()*
