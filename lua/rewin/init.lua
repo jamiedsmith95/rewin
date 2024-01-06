@@ -22,7 +22,7 @@ M.floatingList = function(opts, data)
     height = height,
     style = 'minimal',
     anchor = 'NW',
-    border =  'single'
+    border = 'single'
   }
 
   --If opts.floatinglist doesn't exist, assume provided opts is meant to be opts.floatinglist and fill with saved defaults where needed.
@@ -58,7 +58,7 @@ M.floatingList = function(opts, data)
     end,
     buffer = bufnr
   })
-  vim.keymap.set({ 'n', 'i' }, "<Plug>selectItem",function() M.selectItem() end, {buffer = bufnr })
+  vim.keymap.set({ 'n', 'i' }, "<Plug>selectItem", function() M.selectItem() end, { buffer = bufnr })
   -- vim.keymap.set({ 'n', 'i' }, "<CR>", function() M.selectItem() end, { buffer = bufnr })
 
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, data)
@@ -148,7 +148,6 @@ local function getResults()
 
     if row == "1" and tonumber(col) < 5 then goto continue end -- skip auto placed marks
     if string.match(str, "[A-Z01]") and vim.api.nvim_get_mark(str, {}) then
-
       local temp = { row, file }
       if vim.tbl_contains(rowAndFiles, temp) then goto continue end
       table.insert(rowAndFiles, { count = temp })
@@ -165,7 +164,7 @@ local function getResults()
       table.insert(results, all[idx].count[1])
     end
   end
-  table.sort(results) 
+  table.sort(results)
 
   return results
 end
@@ -206,7 +205,7 @@ M.makeWin = function(mark, opts)
     getBuf(mark)
   end
   local marks = getResults()
-  if #marks == 0 then 
+  if #marks == 0 then
     M.listSelect(opts)
     return
   end
@@ -237,7 +236,7 @@ M.makeWin = function(mark, opts)
   local win = vim.api.nvim_open_win(buffer, false,
     opts.makewin)
   if (vim.api.nvim_win_get_config(0).relative ~= '' and (buffer == vim.api.nvim_win_get_buf(0)) or row > vim.api.nvim_buf_line_count(buffer)) then
-  elseif vim.api.nvim_eval("exists('#floatListGroup#WinLeave')") then
+  elseif vim.api.nvim_eval("exists('#floatListGroup')") == 1 and vim.api.nvim_eval("exists('#WinLeave)") == 1 then
     vim.api.nvim_win_set_cursor(win, { row, 1 })
   end
   vim.api.nvim_set_var('haveWin', true)
